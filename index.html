@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Pacientes</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
+        h1, h2 { color: #333; }
+        .container { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #007bff; color: white; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+        .actions button, .actions select { margin-right: 5px; padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        .actions button.edit { background-color: #ffc107; color: #333; }
+        .actions button.delete { background-color: #dc3545; color: white; }
+        .actions button.alta { background-color: #28a745; color: white; }
+        .actions select { padding: 8px; background-color: #6c757d; color: white; }
+        .modal { display: none; position: fixed; z-index: 1; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); }
+        .modal-content { background-color: #fefefe; margin: 10% auto; padding: 20px; border: 1px solid #888; width: 80%; max-width: 500px; border-radius: 8px; }
+        .close-button { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        form label { display: block; margin-bottom: 8px; font-weight: bold; }
+        form input, form select, form textarea { width: calc(100% - 22px); padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 4px; }
+        form button { background-color: #007bff; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        form button:hover { background-color: #0056b3; }
+        #quickRegisterModal, #completeDataModal, #confirmDeleteModal, #confirmAltaModal { /* Styles for modals */ }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Gestión de Pacientes</h1>
+
+        <button id="showQuickRegisterModal">Registro Rápido</button>
+
+        <h2>Pacientes en Espera</h2>
+        <table id="esperaTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Motivo</th>
+                    <th>Estado</th>
+                    <th>Sub-Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <h2>Pacientes en Consulta</h2>
+        <table id="consultaTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Motivo</th>
+                    <th>Hora Triage</th>
+                    <th>Sub-Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <h2>Pacientes Hospitalizados</h2>
+        <table id="hospitalizacionTable">
+             <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Motivo</th>
+                    <th>Hora Hospitalización</th>
+                    <th>Sub-Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Modal de Registro Rápido -->
+    <div id="quickRegisterModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="document.getElementById('quickRegisterModal').style.display='none'">&times;</span>
+            <h2>Registro Rápido de Paciente</h2>
+            <form id="quickRegisterForm">
+                <label for="qrNombre">Nombre:</label>
+                <input type="text" id="qrNombre" required>
+                <label for="qrMotivo">Motivo de Consulta:</label>
+                <input type="text" id="qrMotivo" required>
+                <button type="submit">Registrar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Datos Completos -->
+    <div id="completeDataModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="document.getElementById('completeDataModal').style.display='none'">&times;</span>
+            <h2>Completar Datos del Paciente</h2>
+            <form id="completeDataForm">
+                <input type="hidden" id="cdPacienteId">
+                <label for="cdNombre">Nombre:</label>
+                <input type="text" id="cdNombre" required>
+                <label for="cdMotivo">Motivo de Consulta:</label>
+                <input type="text" id="cdMotivo" required>
+                <label for="cdDetalles">Detalles Adicionales:</label>
+                <textarea id="cdDetalles"></textarea>
+                <button type="submit">Guardar Cambios</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Confirmación de Eliminación -->
+    <div id="confirmDeleteModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="document.getElementById('confirmDeleteModal').style.display='none'">&times;</span>
+            <h2>Confirmar Eliminación</h2>
+            <p>¿Está seguro de que desea eliminar a este paciente?</p>
+            <label for="deleteReason">Motivo de Eliminación:</label>
+            <textarea id="deleteReason" placeholder="Ingrese el motivo (opcional)"></textarea>
+            <button id="confirmDeleteButton">Eliminar</button>
+            <button onclick="document.getElementById('confirmDeleteModal').style.display='none'">Cancelar</button>
+        </div>
+    </div>
+
+     <!-- Modal de Confirmación de Alta -->
+    <div id="confirmAltaModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" onclick="document.getElementById('confirmAltaModal').style.display='none'">&times;</span>
+            <h2>Confirmar Alta del Paciente</h2>
+            <form id="altaForm">
+                <input type="hidden" id="altaPacienteId">
+                <label for="motivoAlta">Motivo del Alta:</label>
+                <textarea id="motivoAlta" required></textarea>
+                <label for="indicacionesAlta">Indicaciones:</label>
+                <textarea id="indicacionesAlta"></textarea>
+                <button type="submit">Confirmar Alta</button>
+            </form>
+        </div>
+    </div>
+
+
+<script>
+const API_BASE_URL = '/api';
+let pacientes = []; // Initialize as empty array
+
+// DOM Elements
+const esperaTableBody = document.getElementById('esperaTable')?.getElementsByTagName('tbody')[0];
+const consultaTableBody = document.getElementById('consultaTable')?.getElementsByTagName('tbody')[0];
+const hospitalizacionTableBody = document.getElementById('hospitalizacionTable')?.getElementsByTagName('tbody')[0];
+
+const quickRegisterModal = document.getElementById('quickRegisterModal');
+const completeDataModal = document.getElementById('completeDataModal');
+const confirmDeleteModal = document.getElementById('confirmDeleteModal');
+const confirmAltaModal = document.getElementById('confirmAltaModal');
+
+const quickRegisterForm = document.getElementById('quickRegisterForm');
+const completeDataForm = document.getElementById('completeDataForm');
+const altaForm = document.getElementById('altaForm');
+
+const showQuickRegisterModalButton = document.getElementById('showQuickRegisterModal');
+
+async function callApi(url, options = {}) {
+    const defaultHeaders = {
+        'Content-Type': 'application/json',
+        // Add other common headers here if needed, e.g., Authorization
+    };
+
+    options.headers = { ...defaultHeaders, ...options.headers };
+
+    if (options.body && typeof options.body === 'object' && !['GET', 'HEAD'].includes(options.method?.toUpperCase())) {
+        options.body = JSON.stringify(options.body);
+    }
+
+    try {
+        const response = await fetch(url, options);
+
+        if (!response.ok) {
+            let errorMsg = `API Error: ${response.status} ${response.statusText}`;
+            let errorData = null;
+            try {
+                errorData = await response.json();
+                errorMsg += ` - ${errorData.message || JSON.stringify(errorData)}`;
+            } catch (e) {
+                // Could not parse error response as JSON
+                try {
+                  const textError = await response.text();
+                  if (textError) {
+                    errorMsg += ` - ${textError}`;
+                  }
+                } catch (textEx) {
+                  // ignore if text can't be read
+                }
+            }
+            console.error(`Error calling API ${options.method || 'GET'} ${url}: ${errorMsg}`, options.body && typeof options.body === 'string' ? `Payload: ${options.body}` : '');
+            const error = new Error(errorMsg);
+            error.status = response.status;
+            error.response = response;
+            error.errorData = errorData; // Attach parsed error data if available
+            throw error;
+        }
+
+        if (response.status === 204) {
+            return null;
+        }
+
+        return await response.json();
+    } catch (error) {
+        if (!error.status) { // Network or other non-HTTP error
+          console.error(`Network or other error calling API ${options.method || 'GET'} ${url}:`, error, options.body && typeof options.body === 'string' ? `Payload: ${options.body}` : '');
+        }
+        // Re-throw the error so that the calling function can handle UI updates
+        throw error;
+    }
+}
+
+// ---- MODAL HANDLING ----
+function closeModal(modalElement) {
+    if (modalElement) {
+        modalElement.style.display = 'none';
+    }
+}
+
+showQuickRegisterModalButton?.addEventListener('click', () => {
+    if (quickRegisterModal) {
+        quickRegisterForm.reset();
+        quickRegisterModal.style.display = 'block';
+    }
+});
+
+// Close modals when clicking on <span> (x)
+document.querySelectorAll('.modal .close-button').forEach(button => {
+    button.onclick = function() {
+        closeModal(this.closest('.modal'));
+    }
+});
+// Close modals when clicking outside
+window.onclick = function(event) {
+    if (event.target.classList.contains('modal')) {
+        closeModal(event.target);
+    }
+}
+
+async function loadInitialPacientes() {
+    try {
+        // Consider adding a visual loading state indicator here in a real app
+        console.log('Cargando pacientes iniciales...');
+        const data = await callApi(`${API_BASE_URL}/pacientes`); // callApi uses GET by default
+        pacientes = data || [];
+        // Ensure 'pacientes' is always an array. If API returns nothing or error, it defaults to empty.
+        if (!Array.isArray(pacientes)) {
+            console.warn('/api/pacientes did not return an array. Defaulting to empty list.');
+            pacientes = [];
+        }
+        console.log('Pacientes cargados:', pacientes.length);
+    } catch (error) {
+        // The error is already logged by callApi.
+        // We could add more user-facing error display here.
+        console.error('Falla crítica al cargar pacientes iniciales. Mostrando tablas vacías.', error);
+        pacientes = []; // Ensure UI renders empty tables instead of breaking
+        // alert('Error al cargar datos iniciales. Funcionalidad limitada.'); // Example user feedback
+    } finally {
+        // Consider hiding loading state indicator here
+        renderAllViews(); // Crucial: Render the UI after attempting to load data
+    }
+}
+
+// ---- API FUNCTIONS ----
+// fetchPacientes is removed as its logic is now in loadInitialPacientes and subsequent updates refresh the cache.
+// If a manual refresh button were added, it might call loadInitialPacientes again.
+
+// addPacienteAPI is removed as its core logic is now within handleQuickRegister using callApi
+
+async function updatePacienteAPI(id, pacienteData) {
+    try {
+        const updatedPaciente = await callApi(`${API_BASE_URL}/pacientes/${id}`, {
+            method: 'PUT',
+            body: pacienteData,
+        });
+        // Update local cache
+        const index = pacientes.findIndex(p => p.id === id);
+        if (index !== -1) {
+            pacientes[index] = updatedPaciente;
+        } else {
+            // If for some reason it's not in cache, add it
+            pacientes.push(updatedPaciente);
+        }
+        return updatedPaciente;
+    } catch (error) {
+        // Error is logged by callApi. Re-throw to allow caller to handle UI.
+        throw error;
+    }
+}
+
+async function deletePacienteAPI(id) {
+    try {
+        await callApi(`${API_BASE_URL}/pacientes/${id}`, {
+            method: 'DELETE',
+        });
+        // Remove from local cache
+        pacientes = pacientes.filter(p => p.id !== id);
+        return true; // Indicate success
+    } catch (error) {
+        // Error is logged by callApi. Re-throw to allow caller to handle UI.
+        throw error;
+    }
+}
+
+// ---- EVENT HANDLERS & LOGIC ----
+document.addEventListener('DOMContentLoaded', async () => { // Made async
+    // Initializations (modal instances, etc.) would go here if they existed and needed to run before load.
+    // For example:
+    // setupAutocomplete('q_originArrival', 'q_originArrivalResults', arrival_origins, 'name', 'name');
+    // setupAutocomplete('diagnosticoBase', 'diagnosticoBaseResults', diagnosisData, 'description', 'description');
+
+    await loadInitialPacientes(); // Fetches data AND calls renderAllViews() in its finally block
+
+    // Event listeners setup
+    if(quickRegisterForm) {
+        quickRegisterForm.addEventListener('submit', handleQuickRegister);
+    }
+    if(completeDataForm) {
+        completeDataForm.addEventListener('submit', handleSaveCompleteData);
+    }
+    if(altaForm) {
+        altaForm.addEventListener('submit', confirmarAlta);
+    }
+    // Listener for delete confirmation will be attached when modal is shown
+});
+
+async function handleQuickRegister(event) {
+    event.preventDefault();
+    const form = event.target; // Get the form from the event
+
+    // This is a placeholder for actual form field IDs that would be in a more complex form
+    // For the current simple form:
+    const nombre = document.getElementById('qrNombre')?.value.trim();
+    const motivoConsulta = document.getElementById('qrMotivo')?.value.trim();
+
+    // In a real form, you would get other values like this:
+    // const registroHarmoni = document.getElementById('regHarmoni')?.value.trim();
+    // const registroSehim = document.getElementById('regSEHIM')?.value.trim();
+    // const firstName = document.getElementById('q_firstName')?.value.trim();
+    // const lastNameP = document.getElementById('q_lastNameP')?.value.trim();
+    // const lastNameM = document.getElementById('q_lastNameM')?.value.trim();
+    // const sexo = document.getElementById('q_sexo')?.value;
+    // const fechaNacimiento = document.getElementById('q_dob')?.value;
+    // const origenLlegada = document.getElementById('q_originArrival')?.value.trim();
+    // const selectedTriageRadio = document.querySelector('input[name="quickTriageType"]:checked');
+    // const triage = selectedTriageRadio ? selectedTriageRadio.value : null;
+
+    // Validate required fields (basic example)
+    if (!nombre || !motivoConsulta) {
+        alert('Nombre y Motivo de Consulta son obligatorios.');
+        // In a real app, you'd use Bootstrap validation or similar
+        // form.classList.add('was-validated');
+        return;
+    }
+
+    const pacienteDataForApi = {
+        // registroHarmoni,
+        // registroSehim,
+        // triage, // Assuming backend sets status based on this or other logic
+        nombre: nombre, // Using the simplified form fields for now
+        // lastNameP,
+        // lastNameM,
+        nombreCompleto: nombre, // Assemble if needed: `${firstName} ${lastNameP} ${lastNameM}`.trim(),
+        // sexo,
+        // fechaNacimiento,
+        // origenLlegada,
+        motivoConsulta: motivoConsulta, // Using simplified field
+        // Client does not set: id, horaLlegada, horaTriage, horaHospitalizacion, statusHistory, status (if backend derives it)
+    };
+
+    try {
+        console.log('Enviando datos de registro rápido:', pacienteDataForApi);
+        const savedPaciente = await callApi(`${API_BASE_URL}/pacientes`, {
+            method: 'POST',
+            body: pacienteDataForApi
+        });
+
+        if (savedPaciente) {
+            pacientes.push(savedPaciente); // Add to local cache
+
+            // Example: Navigate to tab based on server-assigned status
+            // This part requires the specific tab IDs from your HTML structure
+            // if (savedPaciente.status === 'hospitalizacion') {
+            //     document.getElementById('pills-hospitalizacion-tab')?.click();
+            // } else { // 'espera' or other default
+            //     document.getElementById('pills-espera-tab')?.click();
+            // }
+
+            closeModal(quickRegisterModal); // Use your existing closeModal function
+            if (form) {
+                 form.reset();
+                 // form.classList.remove('was-validated'); // If using Bootstrap validation
+            }
+            // Clear any specific triage selections or other dynamic elements in the quick form if they exist
+            // e.g., clearTriageRadioButtons();
+
+            renderAllViews();
+            alert('Paciente registrado con éxito!'); // Or a more subtle notification
+        } else {
+            // This case might occur if API returns 204 or empty body on success
+            // but usually POST returns the created object.
+            console.warn('Registro rápido completado, pero no se recibieron datos del paciente del servidor.');
+            // Potentially call loadInitialPacientes() to refresh everything if unsure about the state
+            await loadInitialPacientes(); // To ensure UI consistency if server response is minimal
+            closeModal(quickRegisterModal);
+             if (form) form.reset();
+        }
+    } catch (error) {
+        console.error('Error al registrar paciente:', error);
+        alert('Error al registrar paciente: ' + (error.message || 'Consulte la consola para más detalles.'));
+        // Do not hide modal, allow user to retry or correct data.
+        // form.classList.add('was-validated'); // Show validation errors if any
+    }
+}
+
+async function handleSaveCompleteData(event) {
+    event.preventDefault();
+    const form = event.target; // Get the form from the event
+    const pacienteId = document.getElementById('cdPacienteId')?.value;
+
+    if (!pacienteId) {
+        console.error("Error: No se encontró pacienteId en el formulario.");
+        alert("Error crítico: No se pudo identificar al paciente para actualizar.");
+        return;
+    }
+
+    const currentPacienteDetails = pacientes.find(p => p.id === pacienteId);
+    if (!currentPacienteDetails) {
+        console.error("Error: Paciente no encontrado en el caché local con ID:", pacienteId);
+        alert("Error crítico: No se pudieron cargar los datos del paciente para actualizar.");
+        return;
+    }
+
+    // Assume these IDs exist in the 'completeDataModal' form
+    // These are illustrative based on the prompt's example.
+    // Adapt to actual form field IDs if they differ.
+    const updatedPacienteData = {
+        // Demographic and administrative data
+        nombre: document.getElementById('cdNombre')?.value.trim(), // Assuming 'cdNombre' is from the complete data modal
+        motivoConsulta: document.getElementById('cdMotivo')?.value.trim(), // Assuming 'cdMotivo'
+        detallesAdicionales: document.getElementById('cdDetalles')?.value.trim(), // Assuming 'cdDetalles'
+
+        // Example fields from the prompt - ensure these IDs are correct for your modal
+        // triage: document.querySelector('input[name="modalTriageType"]:checked')?.value,
+        // edad: document.getElementById('edadEditable')?.value.trim(),
+        // tipoVisita: document.getElementById('tipoVisita')?.value,
+        // reingresa72hrs: document.getElementById('reingresa72hrs')?.checked,
+        // estadoNacimiento: document.getElementById('estadoNacimiento')?.value.trim(),
+        // municipio: document.getElementById('municipio')?.value.trim(),
+        // derechohabiencia: document.getElementById('derechohabiencia')?.value,
+        // diagnosticoBase: document.getElementById('diagnosticoBase')?.value.trim(),
+        // diagnosticoActual: document.getElementById('diagnosticoActual')?.value.trim(),
+        // notas: document.getElementById('notas')?.value.trim(),
+    };
+
+    // Add reingreso fields if applicable (example logic)
+    // if (updatedPacienteData.reingresa72hrs) {
+    //     updatedPacienteData.motivoReingreso = document.querySelector('input[name="motivoReingreso"]:checked')?.value;
+    //     if (updatedPacienteData.motivoReingreso === 'hospitalizacion_especialidades' || updatedPacienteData.motivoReingreso === 'consulta_externa') {
+    //         updatedPacienteData.especialidadReingreso = document.getElementById('especialidadReingreso')?.value.trim();
+    //     }
+    // }
+
+    // Logic to determine status based on triage (if triage is part of this modal)
+    // For now, we'll assume the status might be updated based on other fields or business logic,
+    // or it might be that this form does not change the main 'status' but other details.
+    // If triage selection IS part of this modal and drives status:
+    // const newTriage = updatedPacienteData.triage;
+    let newStatus = currentPacienteDetails.status; // Default to current status
+
+    // if (newTriage === '1') {
+    //     newStatus = 'hospitalizacion';
+    //     updatedPacienteData.areaIngreso = document.getElementById('areaIngreso')?.value;
+    //     updatedPacienteData.camaIngreso = document.getElementById('camaIngreso')?.value.trim();
+    // } else {
+    //     if (currentPacienteDetails.status === 'espera' || currentPacienteDetails.status === 'hospitalizacion') {
+    //         newStatus = 'consulta'; // If not T1, and was waiting or hospitalized, move to consulta
+    //     }
+    //     updatedPacienteData.areaIngreso = null;
+    //     updatedPacienteData.camaIngreso = null;
+    // }
+    updatedPacienteData.status = newStatus; // Send the determined or existing status
+
+    try {
+        console.log(`Enviando datos actualizados para paciente ${pacienteId}:`, updatedPacienteData);
+        const returnedUpdatedPaciente = await callApi(`${API_BASE_URL}/pacientes/${pacienteId}`, {
+            method: 'PUT',
+            body: updatedPacienteData
+        });
+
+        if (returnedUpdatedPaciente) {
+            const pacienteIndex = pacientes.findIndex(p => p.id === pacienteId);
+            if (pacienteIndex > -1) {
+                pacientes[pacienteIndex] = returnedUpdatedPaciente;
+            } else {
+                // Should not happen if currentPacienteDetails was found, but as a fallback:
+                pacientes.push(returnedUpdatedPaciente);
+            }
+
+            // Logic for tab navigation based on returnedUpdatedPaciente.status
+            // if (returnedUpdatedPaciente.status === 'hospitalizacion') {
+            //     document.getElementById('pills-hospitalizacion-tab')?.click();
+            // } else if (returnedUpdatedPaciente.status === 'consulta') {
+            //     document.getElementById('pills-consulta-tab')?.click();
+            // } else { // 'espera' or other
+            //     document.getElementById('pills-espera-tab')?.click();
+            // }
+
+            closeModal(completeDataModal); // Use your existing closeModal
+            // if(form) form.reset(); // Usually good to reset, but check UX preference
+            renderAllViews();
+            alert('Datos del paciente guardados con éxito!');
+        } else {
+             // API might return 204 No Content on PUT success
+            console.warn(`Actualización para paciente ${pacienteId} completada, pero no se recibieron datos actualizados del servidor. Recargando datos locales.`);
+            // Fetch the specific patient's updated details or reload all
+            const freshPacienteData = await callApi(`${API_BASE_URL}/pacientes/${pacienteId}`);
+            if (freshPacienteData) {
+                 const pacienteIndex = pacientes.findIndex(p => p.id === pacienteId);
+                 if (pacienteIndex > -1) pacientes[pacienteIndex] = freshPacienteData; else pacientes.push(freshPacienteData);
+            } else {
+                // Fallback to reloading all if single fetch fails
+                await loadInitialPacientes();
+            }
+            closeModal(completeDataModal);
+            renderAllViews();
+        }
+    } catch (error) {
+        console.error('Error al guardar datos del paciente:', error);
+        alert('Error al guardar datos del paciente: ' + (error.message || 'Consulte la consola para más detalles.'));
+        // Do not hide modal, allow user to retry.
+    }
+}
+
+async function passToConsulta(pacienteId) {
+    const paciente = pacientes.find(p => p.id === pacienteId);
+
+    if (!paciente) {
+        console.error('Paciente no encontrado para pasar a consulta:', pacienteId);
+        alert('Error: Paciente no encontrado.');
+        return;
+    }
+
+    // The prompt implies 'paciente.triage' might exist if set during a "Completar Datos" step.
+    // If 'triage' is only set in "Quick Register" and not always available on 'paciente' object,
+    // this check might need adjustment or rely on current status if 'triage' field isn't guaranteed.
+    // For now, assuming 'triage' could be on the patient object from a previous step.
+    // If 'triage' is NOT reliably on the patient object here, this check needs to be re-evaluated.
+    // A common scenario: patient is in 'espera', and this action moves them to 'consulta'.
+    // The original code's Triage 2/3 check might be from a workflow where triage is done before this explicit "passToConsulta" action.
+
+    // If the intent is just to move from 'espera' to 'consulta' regardless of a pre-set triage value on the object:
+    if (paciente.status === 'espera') { // Or specific conditions like (paciente.triage === '2' || paciente.triage === '3') if triage is set
+        const updatedData = { status: 'consulta' }; // Backend handles horaTriage and statusHistory
+        try {
+            const returnedUpdatedPaciente = await callApi(`${API_BASE_URL}/pacientes/${pacienteId}`, {
+                method: 'PUT',
+                body: updatedData
+            });
+
+            if (returnedUpdatedPaciente) {
+                const pacienteIndex = pacientes.findIndex(p => p.id === pacienteId);
+                if (pacienteIndex > -1) {
+                    pacientes[pacienteIndex] = returnedUpdatedPaciente;
+                } else {
+                    pacientes.push(returnedUpdatedPaciente); // Fallback, though unlikely
+                }
+                renderAllViews();
+
+                // Activate the consulta tab - ensure 'pills-consulta-tab' is the correct ID
+                const consultaTab = document.getElementById('pills-consulta-tab');
+                if (consultaTab) {
+                    // Assuming Bootstrap tabs or similar JS-driven tabs
+                    // new bootstrap.Tab(consultaTab).show(); // For Bootstrap 5
+                    consultaTab.click(); // Generic click, might work for simple setups
+                } else {
+                    console.warn("Elemento 'pills-consulta-tab' no encontrado para cambiar de pestaña.");
+                }
+            } else {
+                // Handle cases where API returns 204 or no content
+                console.warn(`Paciente ${pacienteId} pasado a consulta, pero no se recibieron datos actualizados. Recargando.`);
+                await loadInitialPacientes(); // Refresh all data to ensure consistency
+            }
+        } catch (error) {
+            console.error('Error al pasar paciente ' + pacienteId + ' a consulta:', error);
+            alert('Error al pasar paciente a consulta: ' + (error.message || 'Consulte la consola.'));
+        }
+    } else {
+        // This warning should be based on the actual condition that prevents moving to consulta.
+        // If it's about triage level:
+        // console.warn(`Advertencia: Paciente ${pacienteId} no tiene un Triage 2 o 3 asignado para pasar a Consulta directamente.`);
+        // If it's about current status:
+        console.warn(`Advertencia: Paciente ${pacienteId} no está en un estado válido (ej. 'espera') o no cumple criterios para pasar a consulta.`);
+        // alert('Este paciente no puede ser pasado a consulta directamente o ya está en consulta/otro estado.');
+    }
+}
+
+async function passToHospitalizacion(pacienteId) {
+    const paciente = pacientes.find(p => p.id === pacienteId);
+    if (!paciente) {
+        console.error("Paciente no encontrado para pasar a hospitalización:", pacienteId);
+        alert("Error: Paciente no encontrado.");
+        return;
+    }
+    // Backend sets horaHospitalizacion & statusHistory
+    const updatedData = { status: 'hospitalizacion' };
+
+    try {
+        await updatePacienteAPI(pacienteId, updatedData);
+        renderAllViews();
+    } catch (error) {
+        alert("Error al pasar paciente a hospitalización. Intente de nuevo.");
+    }
+}
+
+
+function showEditModal(pacienteId) {
+    const paciente = pacientes.find(p => p.id === pacienteId);
+    if (paciente && completeDataModal && completeDataForm) {
+        document.getElementById('cdPacienteId').value = paciente.id;
+        document.getElementById('cdNombre').value = paciente.nombre;
+        document.getElementById('cdMotivo').value = paciente.motivoConsulta;
+        document.getElementById('cdDetalles').value = paciente.detallesAdicionales || '';
+        completeDataModal.style.display = 'block';
+    } else {
+        console.error("No se pudo encontrar el paciente para editar o el modal no existe.");
+    }
+}
+
+function showDeleteModal(pacienteId) {
+    if (confirmDeleteModal) {
+        const confirmDeleteButton = document.getElementById('confirmDeleteButton');
+        document.getElementById('deleteReason').value = ''; // Clear previous reason
+
+        // Clone and replace the button to remove old event listeners
+        const newButton = confirmDeleteButton.cloneNode(true);
+        confirmDeleteButton.parentNode.replaceChild(newButton, confirmDeleteButton);
+
+        newButton.onclick = () => confirmDeletePatientWithReason(pacienteId); // Pass ID directly
+        confirmDeleteModal.style.display = 'block';
+    }
+}
+
+async function confirmDeletePatientWithReason(pacienteId) {
+    // const motivoEliminacion = document.getElementById('deleteReason').value;
+    // For now, DELETE does not send a body. Backend may handle reason logging differently.
+    // If API needs reason in body, this would need to be a PUT to a /delete endpoint or similar.
+    try {
+        await deletePacienteAPI(pacienteId);
+        renderAllViews();
+        closeModal(confirmDeleteModal);
+    } catch (error) {
+        alert("Error al eliminar paciente. Intente de nuevo.");
+    }
+}
+
+function showAltaModal(pacienteId) {
+     const paciente = pacientes.find(p => p.id === pacienteId);
+    if (paciente && confirmAltaModal && altaForm) {
+        document.getElementById('altaPacienteId').value = paciente.id;
+        altaForm.reset(); // Clear previous entries
+        confirmAltaModal.style.display = 'block';
+    } else {
+        console.error("No se pudo encontrar el paciente para dar de alta o el modal no existe.");
+    }
+}
+
+async function confirmarAlta(event) {
+    event.preventDefault();
+    const pacienteId = document.getElementById('altaPacienteId').value;
+    const motivoAlta = document.getElementById('motivoAlta').value;
+    const indicacionesAlta = document.getElementById('indicacionesAlta').value;
+
+    const updatedData = {
+        status: 'alta',
+        motivoAlta,
+        indicacionesAlta,
+        // Backend sets horaAlta and updates statusHistory
+    };
+
+    try {
+        await updatePacienteAPI(pacienteId, updatedData);
+        // For 'alta', we typically remove them from active views or filter them out
+        // The backend might return the updated patient, but for the UI, they are often removed
+        // from lists of active patients. Re-fetching or filtering local cache is needed.
+        // For simplicity, we'll filter locally. The backend will mark as 'alta'.
+        pacientes = pacientes.filter(p => p.id !== pacienteId); // Or refetch if active patients are returned by GET /api/pacientes
+        renderAllViews();
+        closeModal(confirmAltaModal);
+    } catch (error) {
+        alert("Error al confirmar alta. Intente de nuevo.");
+    }
+}
+
+
+async function handleStatusChange(event, pacienteId) {
+    const newSubStatus = event.target.value;
+    const paciente = pacientes.find(p => p.id === pacienteId);
+
+    if (!paciente) {
+        console.error("Paciente no encontrado para cambio de sub-estado:", pacienteId);
+        return;
+    }
+
+    // Determine if this is a main status change or just subStatus
+    let updatedData = { subStatus: newSubStatus };
+    if (newSubStatus === 'consulta_directa') { // Example: subStatus implies main status change
+        updatedData.status = 'consulta'; // Backend sets horaTriage
+    } else if (newSubStatus === 'hospitalizacion_directa') {
+        updatedData.status = 'hospitalizacion'; // Backend sets horaHospitalizacion
+    }
+    // Add more conditions if other subStatuses imply a main status change
+
+    try {
+        await updatePacienteAPI(pacienteId, updatedData);
+        renderAllViews();
+    } catch (error) {
+        alert("Error al actualizar estado del paciente. Intente de nuevo.");
+        // Optionally, revert select change in UI if API call fails
+        event.target.value = paciente.subStatus || ''; // Revert to original subStatus
+    }
+}
+
+
+// ---- RENDERING ----
+function renderAllViews() {
+    if (esperaTableBody) renderTable(esperaTableBody, pacientes.filter(p => p.status === 'espera'), 'espera');
+    if (consultaTableBody) renderTable(consultaTableBody, pacientes.filter(p => p.status === 'consulta'), 'consulta');
+    if (hospitalizacionTableBody) renderTable(hospitalizacionTableBody, pacientes.filter(p => p.status === 'hospitalizacion'), 'hospitalizacion');
+}
+
+function renderTable(tbody, data, type) {
+    if (!tbody) {
+        console.warn(`Table body for type "${type}" not found. Skipping render.`);
+        return;
+    }
+    tbody.innerHTML = ''; // Clear existing rows
+
+    const subStatusOptions = {
+        espera: [
+            { value: "esperando_triage", text: "Esperando Triage" },
+            { value: "esperando_consulta", text: "Esperando Consulta" },
+            { value: "esperando_hospitalizacion", text: "Esperando Hospitalización" }
+        ],
+        consulta: [
+            { value: "en_evaluacion", text: "En Evaluación" },
+            { value: "pendiente_resultados", text: "Pendiente Resultados" },
+            { value: "listo_para_alta_consulta", text: "Listo para Alta (desde consulta)" }
+        ],
+        hospitalizacion: [
+            { value: "en_habitacion", text: "En Habitación" },
+            { value: "intervencion_quirurgica", text: "Intervención Quirúrgica" },
+            { value: "en_uci", text: "En UCI" },
+            { value: "listo_para_alta_hosp", text: "Listo para Alta (desde hospitalización)" }
+        ]
+    };
+
+    data.forEach(paciente => {
+        const row = tbody.insertRow();
+        row.insertCell().textContent = paciente.id || 'N/A';
+        row.insertCell().textContent = paciente.nombre;
+        row.insertCell().textContent = paciente.motivoConsulta;
+
+        if (type === 'consulta') {
+            row.insertCell().textContent = paciente.horaTriage ? new Date(paciente.horaTriage).toLocaleTimeString() : 'N/A';
+        } else if (type === 'hospitalizacion') {
+            row.insertCell().textContent = paciente.horaHospitalizacion ? new Date(paciente.horaHospitalizacion).toLocaleTimeString() : 'N/A';
+        } else if (type === 'espera') {
+             row.insertCell().textContent = paciente.status; // Main status for 'espera'
+        }
+
+
+        // Sub-status dropdown
+        const subStatusCell = row.insertCell();
+        const select = document.createElement('select');
+        select.className = 'substatus-select';
+        // Populate options based on current patient status or table type
+        const currentSubStatuses = subStatusOptions[paciente.status] || subStatusOptions[type] || [];
+        currentSubStatuses.forEach(opt => {
+            const option = document.createElement('option');
+            option.value = opt.value;
+            option.text = opt.text;
+            if (paciente.subStatus === opt.value) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+        // Add a default/placeholder if no subStatus or not in options
+        if (!paciente.subStatus || !currentSubStatuses.find(opt => opt.value === paciente.subStatus)) {
+            const defaultOption = document.createElement('option');
+            defaultOption.value = "";
+            defaultOption.text = "Seleccionar...";
+            defaultOption.disabled = true;
+            if (!paciente.subStatus) defaultOption.selected = true;
+            select.prepend(defaultOption);
+        }
+        select.addEventListener('change', (event) => handleStatusChange(event, paciente.id));
+        subStatusCell.appendChild(select);
+
+
+        // Actions cell
+        const actionsCell = row.insertCell();
+        actionsCell.className = 'actions';
+
+        const editButton = document.createElement('button');
+        editButton.textContent = 'Editar';
+        editButton.className = 'edit';
+        editButton.onclick = () => showEditModal(paciente.id);
+        actionsCell.appendChild(editButton);
+
+        if (type === 'espera') {
+            const toConsultaButton = document.createElement('button');
+            toConsultaButton.textContent = 'Pasar a Consulta';
+            toConsultaButton.onclick = () => passToConsulta(paciente.id);
+            actionsCell.appendChild(toConsultaButton);
+        }
+        if (type === 'consulta') {
+            const toHospButton = document.createElement('button');
+            toHospButton.textContent = 'Hospitalizar';
+            toHospButton.onclick = () => passToHospitalizacion(paciente.id);
+            actionsCell.appendChild(toHospButton);
+
+            const altaButton = document.createElement('button');
+            altaButton.textContent = 'Dar Alta';
+            altaButton.className = 'alta';
+            altaButton.onclick = () => showAltaModal(paciente.id);
+            actionsCell.appendChild(altaButton);
+        }
+         if (type === 'hospitalizacion') {
+            const altaButton = document.createElement('button');
+            altaButton.textContent = 'Dar Alta';
+            altaButton.className = 'alta';
+            altaButton.onclick = () => showAltaModal(paciente.id);
+            actionsCell.appendChild(altaButton);
+        }
+
+
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = 'Eliminar';
+        deleteButton.className = 'delete';
+        deleteButton.onclick = () => showDeleteModal(paciente.id);
+        actionsCell.appendChild(deleteButton);
+    });
+}
+
+// Placeholder for initial load, assuming server returns IDs and other fields
+// For testing, you might pre-populate `pacientes` array here if not using fetch immediately.
+// fetchPacientes(); // Called on DOMContentLoaded
+
+</script>
+</body>
+</html>
